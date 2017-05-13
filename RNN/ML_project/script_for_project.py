@@ -64,14 +64,14 @@ def lossFun(inputs, targets, hprev):
     counter = 0  #HC - added 3.1.17
     # forward pass
     for t in range(len(inputs)):
-        xs[t] = np.zeros((vocab_size,1)) # encode in 1-of-k representation
+        xs[t] = np.zeros((vocab_size,1))  # encode in 1-of-k representation
         xs[t][inputs[t]] = 1
-        hs[t] = np.tanh(np.dot(Wxh, xs[t]) + np.dot(Whh, hs[t-1]) + bh) # hidden state
+        hs[t] = np.tanh(np.dot(Wxh, xs[t]) + np.dot(Whh, hs[t-1]) + bh)  # hidden state
         #Whh*hs-->Whh*y_syn*hs; y_syn[t+1]=MishaModel(y_syn[t],tau,U,hs) xe*xg(t)
-        ys[t] = np.dot(Why, hs[t]) + by # unnormalized log probabilities for next chars
+        ys[t] = np.dot(Why, hs[t]) + by  # unnormalized log probabilities for next chars
         ps[t] = np.exp(ys[t]) / np.sum(np.exp(ys[t])) # probabilities for next chars
-        loss += -np.log(ps[t][targets[t],0]) # softmax (cross-entropy loss)
-        counter += 1  #HC - added 3.1.17
+        loss += -np.log(ps[t][targets[t],0])  # softmax (cross-entropy loss)
+        counter += 1  # HC - added 3.1.17
         # backward pass: compute gradients going backwards
     dWxh, dWhh, dWhy = np.zeros_like(Wxh), np.zeros_like(Whh), np.zeros_like(Why)
     dbh, dby = np.zeros_like(bh), np.zeros_like(by)
@@ -88,11 +88,11 @@ def lossFun(inputs, targets, hprev):
         dWhh += np.dot(dhraw, hs[t-1].T)
         dhnext = np.dot(Whh.T, dhraw)
     for dparam in [dWxh, dWhh, dWhy, dbh, dby]:
-        np.clip(dparam, -5, 5, out=dparam) # clip to mitigate exploding gradients
+        np.clip(dparam, -5, 5, out=dparam)  # clip to mitigate exploding gradients
 
     perplexity = 2**(loss/counter)  # HC - was added as the lossFun function perplexity
 
-    return loss, dWxh, dWhh, dWhy, dbh, dby, hs[len(inputs)-1], ys, perplexity  # HC - was added as the lossFun function perplexity
+    return loss, dWxh, dWhh, dWhy, dbh, dby, hs[len(inputs)-1], ys, perplexity  # HC - also returning perplexity
 
 
 def sample(h, seed_ix):
@@ -104,19 +104,21 @@ def sample(h, seed_ix):
     x[seed_ix] = 1
     ixes = []
     p = []
-    for t in range(200): #TODO - need to change to:    for t in range(len(seed_ix))
+    for t in range(200): # samples with a 200 characters long text (samples a subtext from the original text)
         h = np.tanh(np.dot(Wxh, x) + np.dot(Whh, h) + bh)
         y = np.dot(Why, h) + by
         p = np.exp(y) / np.sum(np.exp(y))  # softmax
         # aux_perp += -np.log2(float(p[t]))
+        # choose randomly (with accordance to it's probability) one of the chars from the vocabulary :
         ix = np.random.choice(range(vocab_size), p=p.ravel())
         x = np.zeros((vocab_size, 1))
         x[ix] = 1
         ixes.append(ix)
-    aux_perp = float(0)  # HC - was added as the sample function perplexity
+    # HC - calculate sample function perplexity:  (append it to the return arguments)
+    aux_perp = float(0)
     for i in range(len(p)):
-        aux_perp += -np.log2(float(p[i]))   # HC - was added as the sample function perplexity
-    perplexity_ = 2**(aux_perp / len(p))  # HC - was added as the sample function perplexity
+        aux_perp += -np.log2(float(p[i]))
+    perplexity_ = 2**(aux_perp / len(p))
     return ixes, perplexity_
 
 
@@ -143,7 +145,7 @@ while True:
     inputs = [char_to_ix[ch] for ch in data[p:p+seq_length]]
     targets = [char_to_ix[ch] for ch in data[p+1:p+seq_length+1]]
 
-  # sample from the model now and then
+    # sample from the model now and then (and in each 100 iterations use again)
     if n % 100 == 0:
         sample_ix, sample_perplexity_iteration = sample(hprev, inputs[0])
         txt = ''.join(ix_to_char[ix] for ix in sample_ix)
@@ -164,9 +166,11 @@ while True:
         param += -learning_rate * dparam / np.sqrt(mem + 1e-8) # adagrad update
     # print (y)
     p += seq_length # move data pointer
-    n += 1 # iteration counter
+    n += 1  # iteration counter
+    # insert Loss and current char (in txt) to the log memory list:
     Loss_arr.append(loss)
     Out.append(txt)
+    # HC - stop condition - abs(delta) < T       - added by Gal
     if len(Loss_arr)>1:
         if (abs(Loss_arr[-2]-Loss_arr[-1]) < threshold):
               print("Loss delta: ",(Loss_arr[-2]-Loss_arr[-1]))
